@@ -41,6 +41,9 @@ func Bench(c ConfData) {
 			}
 
 			i++
+			if c.LimitMax > 0 && i > c.LimitMax {
+				return io.EOF
+			}
 			files = append(files, path)
 			return nil
 		})
