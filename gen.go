@@ -1,7 +1,6 @@
 package hbench
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -16,7 +15,7 @@ var letterRunes = []rune("abcdefghijk")
 
 //var letterRunesBig = []rune("abcdefghijkl")
 
-func Gen(c ConfData) {
+func Gen(c ConfData) (RJson, error) {
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -24,9 +23,11 @@ func Gen(c ConfData) {
 	var total_files uint64
 	start := time.Now()
 
-	fmt.Println("Path", c.Path)
-	fmt.Println("Threads", c.Threads)
-	fmt.Println("Files", c.Max)
+	if c.DebugInfo {
+		log.Println("Path", c.Path)
+		log.Println("Threads", c.Threads)
+		log.Println("Files", c.Max)
+	}
 
 	swg := sizedwaitgroup.New(c.Threads)
 
@@ -37,7 +38,15 @@ func Gen(c ConfData) {
 		go func() {
 			defer swg.Done()
 
-			bytes := createfile(dir, file, c.Size+rand.Intn(c.RandSize), i)
+			s := c.Size + rand.Intn(c.RandSize)
+			if c.DebugInfo {
+				log.Println("Writing", dir+"/"+file, s, "mb", c)
+			}
+
+			bytes := createfile(dir, file, s, i)
+			if c.DebugInfo {
+				log.Println("Writed", dir+"/"+file, bytes, "bytes, file: ", total_files)
+			}
 			atomic.AddUint64(&total_bytes, bytes)
 			atomic.AddUint64(&total_files, 1)
 
@@ -54,17 +63,29 @@ func Gen(c ConfData) {
 
 	speed := float64(total_bytes) / elapsed.Seconds()
 
-	log.Println("Writed", total_files, "files and", megabytes, " (", gigabytes, ") in", c.Threads, "threads")
-	log.Printf("Speed: %.2f mb/s", speed/1024/1024)
-	log.Println("Took", elapsed, "(", elapsed.Seconds(), ") seconds")
+	if c.DebugInfo {
+		log.Println("Writed", total_files, "files and", megabytes, " (", gigabytes, ") in", c.Threads, "threads")
+		log.Printf("Speed: %.2f mb/s", speed/1024/1024)
+		log.Println("Took", elapsed, "(", elapsed.Seconds(), ") seconds")
+	}
 
+	r := RJson{
+		Threads:  c.Threads,
+		Bytes:    total_bytes,
+		Files:    total_files,
+		Seconds:  elapsed.Seconds(),
+		TimeStr:  elapsed.String(),
+		SpeedMBs: speed / 1024 / 1024,
+	}
+
+	return r, nil
 }
 func createfile(dir string, file string, size int, c int) uint64 {
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		os.MkdirAll(dir, os.ModePerm)
 	}
-	fmt.Println("Writing", dir+"/"+file, size, "mb", c)
+
 	f, _ := os.OpenFile(dir+"/"+file, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0655)
 	defer f.Close()
 
@@ -79,7 +100,7 @@ func createfile(dir string, file string, size int, c int) uint64 {
 		bytes, _ := f.Write(d)
 		total_bytes += uint64(bytes)
 	}
-	fmt.Println("Writed", dir+"/"+file, size, "mb", c)
+
 	return total_bytes
 }
 

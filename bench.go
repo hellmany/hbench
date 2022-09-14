@@ -2,7 +2,6 @@ package hbench
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"log"
 	"math/rand"
@@ -19,14 +18,18 @@ import (
 var allFiles []string
 var files []string
 
-func Bench(c ConfData) {
+func Bench(c ConfData) (RJson, error) {
 
 	//      pid := os.Getpid()
 	//      syscall.Setpriority(syscall.PRIO_PROCESS, pid, -19)
-
-	fmt.Println("Path", c.Path)
-	fmt.Println("Threads", c.Threads)
-	fmt.Println("Files", c.Max)
+	if c.DebugInfo {
+		log.Println("Path", c.Path)
+		log.Println("Threads", c.Threads)
+		log.Println("Files", c.Max)
+	}
+	if c.LimitMax > 0 && c.LimitMax < c.Max {
+		c.LimitMax = c.Max
+	}
 
 	swg := sizedwaitgroup.New(c.Threads)
 	i := 0
@@ -48,35 +51,44 @@ func Bench(c ConfData) {
 			return nil
 		})
 	if err != nil && err != io.EOF {
-		fmt.Println("Error walk", err)
-		os.Exit(1)
+		if c.DebugInfo {
+			log.Println("Error walk", err)
+		}
+		return RJson{}, err
 	}
 
 	var total_bytes uint64
 	var total_files uint64
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(files), func(i, j int) { files[i], files[j] = files[j], files[i] })
-
-	fmt.Println("Readed", len(files), "paths...")
+	if c.DebugInfo {
+		log.Println("Readed", len(files), "paths...")
+	}
 
 	if c.Max > 0 && len(files) > c.Max {
 		files = files[:c.Max]
 	}
 
 	start := time.Now()
-
-	fmt.Println("To process", len(files), "paths...")
+	if c.DebugInfo {
+		log.Println("To process", len(files), "paths...")
+	}
 
 	for ci := 0; ci < c.Inter; ci++ {
 		for _, path := range files {
 			swg.Add()
 
 			go func(path string) {
-				log.Println("Reading", path, ci)
+				if c.DebugInfo {
+					log.Println("Reading", path, ci)
+				}
 				defer swg.Done()
 
 				bytes, _ := readFile(path, c.Size*1024)
-				log.Println("Readed", path, ci, total_files, bytes, "bytes")
+
+				if c.DebugInfo {
+					log.Println("Readed", path, ci, total_files, bytes, "bytes")
+				}
 				atomic.AddUint64(&total_files, 1)
 				atomic.AddUint64(&total_bytes, bytes)
 				return
@@ -94,10 +106,20 @@ func Bench(c ConfData) {
 	gigabytes := b.Format("%.2f ", "gigabyte", true)
 
 	speed := float64(total_bytes) / elapsed.Seconds()
-
-	log.Println("Readed", total_files, "files and", megabytes, " (", gigabytes, ") in", c.Threads, "threads")
-	log.Printf("Speed: %.2f mb/s", speed/1024/1024)
-	log.Println("Took", elapsed, "(", elapsed.Seconds(), "seconds)")
+	if c.DebugInfo {
+		log.Println("Readed", total_files, "files and", megabytes, " (", gigabytes, ") in", c.Threads, "threads")
+		log.Printf("Speed: %.2f mb/s", speed/1024/1024)
+		log.Println("Took", elapsed, "(", elapsed.Seconds(), "seconds)")
+	}
+	r := RJson{
+		Threads:  c.Threads,
+		Bytes:    total_bytes,
+		Files:    total_files,
+		Seconds:  elapsed.Seconds(),
+		TimeStr:  elapsed.String(),
+		SpeedMBs: speed / 1024 / 1024,
+	}
+	return r, nil
 }
 
 func readFile(p string, size int) (uint64, error) {
