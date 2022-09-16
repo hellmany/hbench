@@ -39,7 +39,7 @@ func Bench(c ConfData) (RJson, error) {
 			if err != nil {
 				return err
 			}
-			if info.IsDir() || (len(c.Ext) > 0 && !strings.Contains(path, c.Ext)) {
+			if info.IsDir() || (len(c.Extension) > 0 && !strings.Contains(path, c.Extension)) {
 				return nil
 			}
 

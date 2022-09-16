@@ -34,7 +34,7 @@ func Gen(c ConfData) (RJson, error) {
 	for i := 1; i <= c.Max; i++ {
 		swg.Add()
 		dir := c.Path + "/" + RandStringRunes(2) + "/" + RandStringRunes(2)
-		file := RandStringRunes(10) + ".test.mp4"
+		file := RandStringRunes(10) + c.Extension
 		go func() {
 			defer swg.Done()
 

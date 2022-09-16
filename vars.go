@@ -7,9 +7,9 @@ type ConfData struct {
 	Size      int
 	RandSize  int
 	Path      string
-	Ext       string
 	Inter     int
 	DebugInfo bool
+	Extension string
 }
 
 type RJson struct {
